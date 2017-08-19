@@ -1,5 +1,11 @@
 {
+  "name": "flow-typed-wip",
+  "description": "wip typedefs for Flowtype",
+  "version": "1.0.0",
+  "author": "Entria <dev@entria.com>",
   "devDependencies": {
-    "flow-bin": "^0.52.0"
-  }
+    "flow-bin": "^0.53.1"
+  },
+  "license": "MIT",
+  "repository": "git@github.com:entria/flow-typed-wip.git"
 }
