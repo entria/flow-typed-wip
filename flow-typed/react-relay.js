@@ -1,12 +1,5 @@
-/* @flow */
-declare module 'entria/natura/flow-typed-wip/flow-typed/react-relay' {
-  declare export type PayloadError = {
-    message: string,
-    locations?: Array<{
-      line: number,
-      column: number,
-    }>,
-  };
+declare module 'react-relay' {
+  declare export type RecordState = 'EXISTENT' | 'NONEXISTENT' | 'UNKNOWN';
 
   declare export type onCompleted = (response: ?Object, errors: ?Array<PayloadError>) => void;
   declare export type onError = (error: Error) => void;
@@ -297,9 +290,15 @@ declare module 'entria/natura/flow-typed-wip/flow-typed/react-relay' {
 
   declare export type GeneratedNodeMap = { [key: string]: GraphQLTaggedNode };
 
-  declare export function createFragmentContainer<TBase: ReactClass<*>>(
+  declare export function createFragmentContainer<TBase: React$ComponentType<*>>(
     Component: TBase,
     fragmentSpec: GraphQLTaggedNode | GeneratedNodeMap,
+  ): TBase;
+
+  declare export function createRefetchContainer<TBase: React$ComponentType<*>>(
+    Component: TBase,
+    fragmentSpec: GraphQLTaggedNode | GeneratedNodeMap,
+    taggedNode: GraphQLTaggedNode,
   ): TBase;
 
   declare export type Variables = { [name: string]: $FlowFixMe };
@@ -615,28 +614,18 @@ declare module 'entria/natura/flow-typed-wip/flow-typed/react-relay' {
    * The public API of Relay core. Represents an encapsulated environment with its
    * own in-memory cache.
    */
-  declare export interface CEnvironment<
-    TEnvironment,
-    TFragment,
-    TGraphQLTaggedNode,
-    TNode,
-    TOperation,
-    TPayload,
-  > {
+  declare export interface CEnvironment<TEnvironment, TFragment, TGraphQLTaggedNode, TNode, TOperation, TPayload> {
     /**
      * Read the results of a selector from in-memory records in the store.
      */
-    lookup(selector: CSelector<TNode>): CSnapshot<TNode, Record>,
+    lookup(selector: CSelector<TNode>): CSnapshot<TNode>,
 
     /**
      * Subscribe to changes to the results of a selector. The callback is called
      * when data has been committed to the store that would cause the results of
      * the snapshot's selector to change.
      */
-    subscribe(
-      snapshot: CSnapshot<TNode, Record>,
-      callback: (snapshot: CSnapshot<TNode, Record>) => void,
-    ): Disposable,
+    subscribe(snapshot: CSnapshot<TNode>, callback: (snapshot: CSnapshot<TNode>) => void): Disposable,
 
     /**
      * Ensure that all the records necessary to fulfill the given selector are
@@ -682,22 +671,10 @@ declare module 'entria/natura/flow-typed-wip/flow-typed/react-relay' {
       operation: COperationSelector<TNode, TOperation>,
     |}): Disposable,
 
-    unstable_internal: CUnstableEnvironmentCore<
-      TEnvironment,
-      TFragment,
-      TGraphQLTaggedNode,
-      TNode,
-      TOperation,
-    >,
+    unstable_internal: CUnstableEnvironmentCore<TEnvironment, TFragment, TGraphQLTaggedNode, TNode, TOperation>,
   }
 
-  declare export interface CUnstableEnvironmentCore<
-    TEnvironment,
-    TFragment,
-    TGraphQLTaggedNode,
-    TNode,
-    TOperation,
-  > {
+  declare export interface CUnstableEnvironmentCore<TEnvironment, TFragment, TGraphQLTaggedNode, TNode, TOperation> {
     /**
      * Create an instance of a FragmentSpecResolver.
      *
@@ -707,6 +684,7 @@ declare module 'entria/natura/flow-typed-wip/flow-typed/react-relay' {
      */
     createFragmentSpecResolver: (
       context: CRelayContext<TEnvironment>,
+      containerName: string,
       fragments: CFragmentMap<TFragment>,
       props: Props,
       callback: () => void,
@@ -718,10 +696,7 @@ declare module 'entria/natura/flow-typed-wip/flow-typed/react-relay' {
      * filtered to exclude variables that do not matche defined arguments on the
      * operation, and default values are populated for null values.
      */
-    createOperationSelector: (
-      operation: TOperation,
-      variables: Variables,
-    ) => COperationSelector<TNode, TOperation>,
+    createOperationSelector: (operation: TOperation, variables: Variables) => COperationSelector<TNode, TOperation>,
 
     /**
      * Given a graphql`...` tagged template, extract a fragment definition usable
@@ -770,11 +745,7 @@ declare module 'entria/natura/flow-typed-wip/flow-typed/react-relay' {
      * const childData = environment.lookup(childSelector).data;
      * ```
      */
-    getSelector: (
-      operationVariables: Variables,
-      fragment: TFragment,
-      prop: mixed,
-    ) => ?CSelector<TNode>,
+    getSelector: (operationVariables: Variables, fragment: TFragment, prop: mixed) => ?CSelector<TNode>,
 
     /**
      * Given the result `items` from a parent that fetched `fragment`, creates a
@@ -845,58 +816,31 @@ declare module 'entria/natura/flow-typed-wip/flow-typed/react-relay' {
   declare export interface Environment
     extends CEnvironment<TEnvironment, TFragment, TGraphQLTaggedNode, TNode, TOperation, TPayload> {
     /**
-     * Apply an optimistic update to the environment. The mutation can be reverted
-     * by calling `dispose()` on the returned value.
+     * Applies an optimistic mutation to the store without committing it to the
+     * server. The returned Disposable can be used to revert this change at a
+     * later time.
      */
-    applyUpdate(updater: StoreUpdater): Disposable,
-
-    /**
-     * Determine if the selector can be resolved with data in the store (i.e. no
-     * fields are missing).
-     *
-     * Note that this operation effectively "executes" the selector against the
-     * cache and therefore takes time proportional to the size/complexity of the
-     * selector.
-     */
-    check(selector: Selector): boolean,
-
-    /**
-     * Commit an updater to the environment. This mutation cannot be reverted and
-     * should therefore not be used for optimistic updates. This is mainly
-     * intended for updating fields from client schema extensions.
-     */
-    commitUpdate(updater: StoreUpdater): void,
-
-    /**
-     * Get the environment's internal Store.
-     */
-    getStore(): Store,
-
-    /**
-     * Send a mutation to the server. If provided, the optimistic updater is
-     * executed immediately and reverted atomically when the server payload is
-     * committed.
-     */
-    sendMutation(config: {|
-      onCompleted?: ?(errors: ?Array<PayloadError>) => void,
-      onError?: ?(error: Error) => void,
-      operation: OperationSelector,
-      optimisticResponse?: ?() => Object,
-      optimisticUpdater?: ?SelectorStoreUpdater,
-      updater?: ?SelectorStoreUpdater,
-      uploadables?: UploadableMap,
+    applyMutation(config: {|
+      configs: Array<RelayMutationConfig>,
+      operation: ConcreteOperationDefinition,
+      optimisticResponse: Object,
+      variables: Variables,
     |}): Disposable,
 
     /**
-     * Send a (GraphQL) subscription to the server. Whenever there is a push from
-     * the server, commit the update to the environment.
+     * Applies an optimistic mutation if provided and commits the mutation to the
+     * server. The returned Disposable can be used to bypass the `onCompleted`
+     * and `onError` callbacks when the server response is returned.
      */
-    sendSubscription(config: {|
-      onCompleted?: ?(errors: ?Array<PayloadError>) => void,
-      onNext?: ?(payload: RelayResponsePayload) => void,
+    sendMutation<ResponseType>(config: {|
+      configs: Array<RelayMutationConfig>,
+      onCompleted?: ?(response: ResponseType) => void,
       onError?: ?(error: Error) => void,
-      operation: OperationSelector,
-      updater?: ?SelectorStoreUpdater,
+      operation: ConcreteOperationDefinition,
+      optimisticOperation?: ?ConcreteOperationDefinition,
+      optimisticResponse?: ?Object,
+      variables: Variables,
+      uploadables?: UploadableMap,
     |}): Disposable,
   }
 
@@ -967,32 +911,288 @@ declare module 'entria/natura/flow-typed-wip/flow-typed/react-relay' {
    */
   declare export type SelectorStoreUpdater = (store: RecordSourceSelectorProxy) => void;
 
-  declare export function commitMutation(
-    environment: Environment,
-    config: MutationConfig,
-  ): Disposable;
+  declare export type CallValue = ?(boolean | number | string | { [key: string]: CallValue } | Array<CallValue>);
 
-  declare export class QueryRenderer extends React$Component {
-    props: {
-      cacheConfig?: ?CacheConfig,
-      environment: Environment | ClassicEnvironment,
-      query: ?GraphQLTaggedNode,
-      render: (readyState: ReadyState, prevState: ?ReadyState) => ?React$Element<*>,
-      variables: Variables,
-    },
-  }
+  declare export type RangeBehaviorsFunction = (connectionArgs: {
+    [argName: string]: CallValue,
+  }) =>
+    | 'APPEND'
+    | 'IGNORE'
+    | 'PREPEND'
+    | 'REFETCH'
+    | 'REMOVE'
+    | 'NODE_DELETE_HANDLER'
+    | 'RANGE_ADD_HANDLER'
+    | 'RANGE_DELETE_HANDLER'
+    | 'HANDLER_TYPES'
+    | 'OPTIMISTIC_UPDATE'
+    | 'SERVER_UPDATE'
+    | 'POLLER_UPDATE'
+    | 'UPDATE_TYPES'
+    | 'RANGE_OPERATIONS';
 
-  declare type RefetchOptions = {
-    force?: boolean, // Refetch even if already fetched this query and variables.
+  declare export type RangeBehaviorsObject = {
+    [key: string]: 'APPEND' | 'IGNORE' | 'PREPEND' | 'REFETCH' | 'REMOVE',
   };
 
-  declare export type RelayRefetchContext = {
+  declare export type RangeBehaviors = RangeBehaviorsFunction | RangeBehaviorsObject;
+
+  declare export type RelayConcreteNode = mixed;
+
+  declare export type RelayMutationConfig =
+    | {
+        type: 'FIELDS_CHANGE',
+        fieldIDs: { [fieldName: string]: DataID | Array<DataID> },
+      }
+    | {
+        type: 'RANGE_ADD',
+        parentName?: string,
+        parentID?: string,
+        connectionInfo?: Array<{
+          key: string,
+          filters?: Variables,
+          rangeBehavior: string,
+        }>,
+        connectionName?: string,
+        edgeName: string,
+        rangeBehaviors?: RangeBehaviors,
+      }
+    | {
+        type: 'NODE_DELETE',
+        parentName?: string,
+        parentID?: string,
+        connectionName?: string,
+        deletedIDFieldName: string,
+      }
+    | {
+        type: 'RANGE_DELETE',
+        parentName?: string,
+        parentID?: string,
+        connectionKeys?: Array<{
+          key: string,
+          filters?: Variables,
+        }>,
+        connectionName?: string,
+        deletedIDFieldName: string | Array<string>,
+        pathToConnection: Array<string>,
+      }
+    | {
+        type: 'REQUIRED_CHILDREN',
+        children: Array<RelayConcreteNode>,
+      };
+
+  declare export type MutationConfig<T> = {|
+    configs?: Array<RelayMutationConfig>,
+    mutation: GraphQLTaggedNode,
+    variables: Variables,
+    uploadables?: UploadableMap,
+    onCompleted?: ?(response: T, errors: ?Array<PayloadError>) => void,
+    onError?: ?(error: Error) => void,
+    optimisticUpdater?: ?SelectorStoreUpdater,
+    optimisticResponse?: Object,
+    updater?: ?SelectorStoreUpdater,
+  |};
+
+  // a.k.a commitRelayModernMutation
+  declare export function commitMutation<T>(environment: Environment, config: MutationConfig<T>): Disposable;
+
+  declare export type ReadyState = {
+    error: ?Error,
+    props: ?Object,
+    retry: ?() => void,
+  };
+
+  /**
+   * Classic environment below here
+   */
+  declare export class RelayQueryFragment {
+    // stub
+  }
+
+  declare export class RelayQueryNode {
+    // stub
+  }
+
+  declare export class RelayQueryRoot {
+    // stub
+  }
+
+  declare export class RelayStoreData {
+    // stub
+  }
+
+  declare export type RelayQuerySet = { [queryName: string]: ?RelayQueryRoot };
+  declare export type ReadyStateChangeCallback = (readyState: ReadyState) => void;
+  declare export type Abortable = {
+    abort(): void,
+  };
+  declare export type StoreReaderData = Object;
+  declare export type StoreReaderOptions = {
+    traverseFragmentReferences?: boolean,
+    traverseGeneratedFields?: boolean,
+  };
+  declare export type FragmentResolver = {
+    dispose(): void,
+    resolve(
+      fragment: RelayQueryFragment,
+      dataIDs: DataID | Array<DataID>,
+    ): ?(StoreReaderData | Array<?StoreReaderData>),
+  };
+
+  declare export interface RelayEnvironmentInterface {
+    forceFetch(querySet: RelayQuerySet, onReadyStateChange: ReadyStateChangeCallback): Abortable,
+    getFragmentResolver(fragment: RelayQueryFragment, onNext: () => void): FragmentResolver,
+    getStoreData(): RelayStoreData,
+    primeCache(querySet: RelayQuerySet, onReadyStateChange: ReadyStateChangeCallback): Abortable,
+    read(node: RelayQueryNode, dataID: DataID, options?: StoreReaderOptions): ?StoreReaderData,
+    readQuery(root: RelayQueryRoot, options?: StoreReaderOptions): Array<?StoreReaderData>,
+  }
+
+  declare export type ClassicEnvironment = RelayEnvironmentInterface;
+
+  declare export class QueryRenderer extends React$Component<{
+    cacheConfig?: ?CacheConfig,
+    environment: Environment | ClassicEnvironment,
+    query: ?GraphQLTaggedNode,
+    render: (readyState: ReadyState) => ?React$Element<*>,
+    variables: Variables,
+  }> {}
+
+  // https://github.com/facebook/relay/blob/master/packages/relay-runtime/network/RelayNetworkTypes.js
+  /**
+   * A cache for saving respones to queries (by id) and variables.
+   */
+  declare export interface ResponseCache {
+    get(id: string, variables: Variables): ?QueryPayload,
+    set(id: string, variables: Variables, payload: QueryPayload): void,
+  }
+
+  /**
+   * An interface for fetching the data for one or more (possibly interdependent)
+   * queries.
+   */
+  declare export interface Network {
+    fetch: FetchFunction,
+    request: RequestResponseFunction,
+    requestStream: RequestStreamFunction,
+  }
+
+  declare export type PayloadData = { [key: string]: mixed };
+
+  declare export type PayloadError = {
+    message: string,
+    locations?: Array<{
+      line: number,
+      column: number,
+    }>,
+  };
+
+  /**
+   * The shape of a GraphQL response as dictated by the
+   * [spec](http://facebook.github.io/graphql/#sec-Response)
+   */
+  declare export type QueryPayload = {|
+    data?: ?PayloadData,
+    errors?: Array<PayloadError>,
+    rerunVariables?: Variables,
+  |};
+
+  /**
+   * The shape of data that is returned by the Relay network layer for a given
+   * query.
+   */
+  declare export type RelayResponsePayload = {|
+    fieldPayloads?: ?Array<HandleFieldPayload>,
+    source: MutableRecordSource,
+    errors: ?Array<PayloadError>,
+  |};
+
+  declare export type PromiseOrValue<T> = Promise<T> | T | Error;
+
+  /**
+   * A function that executes a GraphQL operation with request/response semantics,
+   * with exactly one raw server response returned
+   */
+  declare export type FetchFunction = (
+    operation: ConcreteBatch,
+    variables: Variables,
+    cacheConfig: ?CacheConfig,
+    uploadables?: UploadableMap,
+  ) => PromiseOrValue<QueryPayload>;
+
+  /**
+   * A function that executes a GraphQL operation with request/subscription
+   * semantics, returning one or more raw server responses over time.
+   */
+  declare export type SubscribeFunction = (
+    operation: ConcreteBatch,
+    variables: Variables,
+    cacheConfig: ?CacheConfig,
+    observer: Observer<QueryPayload>,
+  ) => Disposable;
+
+  /**
+   * A function that executes a GraphQL operation with request/subscription
+   * semantics, returning one or more responses over time that include the
+   * initial result and optional updates e.g. as the results of the operation
+   * change.
+   */
+  declare export type RequestStreamFunction = (
+    operation: ConcreteBatch,
+    variables: Variables,
+    cacheConfig: ?CacheConfig,
+    observer: Observer<RelayResponsePayload>,
+  ) => Disposable;
+
+  /**
+   * A function that executes a GraphQL operation with request/response semantics,
+   * with exactly one response returned.
+   */
+  declare export type RequestResponseFunction = (
+    operation: ConcreteBatch,
+    variables: Variables,
+    cacheConfig?: ?CacheConfig,
+    uploadables?: UploadableMap,
+  ) => PromiseOrValue<RelayResponsePayload>;
+
+  declare export type Uploadable = File | Blob;
+  declare export type UploadableMap = { [key: string]: Uploadable };
+
+  declare export type GeneratedNodeMap = { [key: string]: GraphQLTaggedNode };
+
+  declare export type RerunParam = {
+    param: string,
+    import: string,
+    max_runs: number,
+  };
+
+  declare export type RelayProp = {
+    environment: Environment,
+  };
+
+  declare export type RelayPaginationProp = RelayProp & {
+    hasMore: () => boolean,
+    isLoading: () => boolean,
+    loadMore: (pageSize: number, callback: (error: ?Error) => void, options?: RefetchOptions) => ?Disposable,
+    refetchConnection: (
+      totalCount: number,
+      callback: (error: ?Error) => void,
+      refetchVariables: ?Variables,
+    ) => ?Disposable,
+  };
+
+  declare export type RelayRefetchProp = RelayProp & {
     refetch: (
       refetchVariables: Variables | ((fragmentVariables: Variables) => Variables),
       renderVariables: ?Variables,
       callback: ?(error: ?Error) => void,
       options?: RefetchOptions,
     ) => Disposable,
+  };
+
+  declare export type RefetchOptions = {
+    force?: boolean,
+    rerunParamExperimental?: RerunParam,
   };
 }
 
