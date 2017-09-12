@@ -2596,6 +2596,18 @@ declare module 'react-native' {
     ): Promise<typeof undefined>,
   |};
 
+  declare type SimpleTask = {
+    name: string,
+    run: () => void,
+  };
+
+  declare type PromiseTask = {
+    name: string,
+    gen: () => Promise<any>,
+  };
+  declare type IterationManagerHandle = number;
+  declare type IterationManagerTask = Function | SimpleTask | PromiseTask;
+
   declare type InteractionManagerEvents = {
     interactionStart: 'interactionStart',
     interactionComplete: 'interactionComplete',
@@ -4236,17 +4248,6 @@ declare module 'react-native' {
     extraConfig?: ?{ nativeOnly?: Object },
   ): React$ComponentType<any> | string;
 
-  declare type SimpleTask = {
-    name: string,
-    run: () => void,
-  };
-
-  declare type PromiseTask = {
-    name: string,
-    gen: () => Promise<any>,
-  };
-  declare type IterationManagerHandle = number;
-  declare type IterationManagerTask = Function | SimpleTask | PromiseTask;
   declare type TaskProvider = () => IterationManagerTask;
   declare type ComponentProvider = () => React$ComponentType<any>;
   declare type ComponentProviderInstrumentationHook = (
